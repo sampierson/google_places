@@ -2,39 +2,41 @@ require 'google_places/review'
 
 module GooglePlaces
   class Spot
-    attr_accessor :lat, :lng, :name, :icon, :reference, :vicinity, :types, :id, :formatted_phone_number, :international_phone_number, :formatted_address, :address_components, :street_number, :street, :city, :region, :postal_code, :country, :rating, :url, :cid, :website, :reviews
+    attr_accessor :lat, :lng, :name, :icon, :reference, :vicinity, :types, :id, :formatted_phone_number, :international_phone_number, :formatted_address, :address_components, :street_number, :street, :city, :region, :postal_code, :country, :rating, :url, :cid, :website, :reviews, :rankby
 
     def self.list(lat, lng, api_key, options = {})
-      radius = options.delete(:radius) || 200
-      sensor = options.delete(:sensor) || false
-      types  = options.delete(:types)
-      name  = options.delete(:name)
-      keyword = options.delete(:keyword)
-      language  = options.delete(:language)
-      location = Location.new(lat, lng)
-      exclude = options.delete(:exclude) || []
-      retry_options = options.delete(:retry_options) || {}
-
+      exclude = options[:exclude] || []
       exclude = [exclude] unless exclude.is_a?(Array)
 
-      options = {
-        :location => location.format,
-        :radius => radius,
-        :sensor => sensor,
+      # Required Google Places parameters
+      params = {
         :key => api_key,
-        :name => name,
-        :language => language,
-        :keyword => keyword,
-        :retry_options => retry_options
+        :location => Location.new(lat, lng).format,
+        :sensor => !!options[:sensor],
       }
 
-      # Accept Types as a string or array
-      if types
-        types = (types.is_a?(Array) ? types.join('|') : types)
-        options.merge!(:types => types)
+      if options[:rankby].to_s == 'distance'
+        # Note that radius must not be included if rankby=distance
+      else
+        params[:radius] = options[:radius] || 200 # meters
       end
 
-      response = Request.spots(options)
+      # Optional Google Places parameters
+      [:keyword, :language, :name, :rankby, :pagetoken].each do |optname|
+        params[optname] = options[optname] if options[optname]
+      end
+
+      # Accept Types as a string or array
+      types  = options[:types]
+      if types
+        types = (types.is_a?(Array) ? types.join('|') : types)
+        params.merge! :types => types
+      end
+
+      # Finally, our options
+      params[:retry_options] = options[:retry_options] || {}
+
+      response = Request.spots(params)
       response['results'].map do |result|
         self.new(result) if (result['types'] & exclude) == []
       end.compact
@@ -127,6 +129,7 @@ module GooglePlaces
       @cid                        = json_result_object['url'].to_i
       @website                    = json_result_object['website']
       @reviews                    = reviews_component(json_result_object['reviews'])
+      @rankby                     = json_result_object['rankby']
     end
 
     def address_component(address_component_type, address_component_length)

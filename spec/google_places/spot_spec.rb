@@ -114,6 +114,10 @@ describe GooglePlaces::Spot do
       end
     end
 
+    describe "rankby distance" do
+      it "should be tested"
+    end
+
   end
 
   context 'List spots by query' do
